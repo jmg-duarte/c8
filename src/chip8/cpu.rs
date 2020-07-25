@@ -115,6 +115,11 @@ impl CPU {
         self.v_registers[x_idx as usize] ^= self.v_registers[y_idx as usize];
     }
 
+    /// Add the values in registers `x_idx` and `y_idx`, storing the result in `x_idx`.
+    ///
+    /// If the result is greater than `255` then the VF register is set to `1`,
+    /// otherwise, it is set to `0`.
+    /// The lower 8 bits of the result are kept and stored in the register `x_idx`.
     fn add_reg(&mut self, x_idx: u8, y_idx: u8) {
         let v: u16 = self.v_registers[x_idx as usize] as u16 + self.v_registers[y_idx as usize] as u16;
         if v >> 8 != 0 {
@@ -148,7 +153,27 @@ impl CPU {
             (0x8, x_idx, y_idx, 0x2) => self.and_reg(x_idx as u8, y_idx as u8),
             (0x8, x_idx, y_idx, 0x3) => self.xor_reg(x_idx as u8, y_idx as u8),
             (0x8, x_idx, y_idx, 0x4) => self.add_reg(x_idx as u8, y_idx as u8),
-            (_, _, _, _) => {}
+            (0x8, x_idx, y_idx, 0x5) => self.sub_reg(x_idx as u8, y_idx as u8),
+            (0x8, x_idx, y_idx, 0x6) => self.shr_reg(x_idx as u8, y_idx as u8),
+            (0x8, x_idx, y_idx, 0x7) => self.subn_reg(x_idx as u8, y_idx as u8),
+            (0x8, x_idx, y_idx, 0xE) => self.shl_reg(x_idx as u8, y_idx as u8),
+            (0x9, x_idx, y_idx, 0x0) => self.sne_reg(x_idx as u8, y_idx as u8),
+            (0xA, _, _, _) => self.set_i(x_idx as u8),
+            (0xB, _, _, _) => self.jmp_offset(x_idx as u8),
+            (0xC, x_idx, _, _) => self.rnd_and(x_idx as u8),
+            (0xD, x_idx, y_idx, n) => self.draw(x_idx as u8),
+            (0xE, x_idx, 0x9, 0xE) => self.skip_key_pressed(x_idx as u8),
+            (0xE, x_idx, 0xA, 0x1) => self.skip_key_not_pressed(x_idx as u8),
+            (0xF, x_idx, 0x0, 0x7) => self.read_delay_timer(x_idx as u8),
+            (0xF, x_idx, 0x0, 0xA) => self.wait_keypress(x_idx as u8),
+            (0xF, x_idx, 0x1, 0x5) => self.set_delay_timer(x_idx as u8),
+            (0xF, x_idx, 0x1, 0x8) => self.set_sound_timer(x_idx as u8),
+            (0xF, x_idx, 0x1, 0xE) => self.add_i(x_idx as u8),
+            (0xF, x_idx, 0x2, 0x9) => self.set_i_digit(x_idx as u8),
+            (0xF, x_idx, 0x3, 0x3) => self.store_bcd(x_idx as u8),
+            (0xF, x_idx, 0x5, 0x5) => self.store_registers(x_idx as u8),
+            (0xF, x_idx, 0x6, 0x5) => self.read_registers(x_idx as u8),
+            (_, _, _, _) => panic!("unknown instruction")
         }
     }
 }
