@@ -1,11 +1,11 @@
 const N_VREGISTERS: usize = 16;
 const STACK_SIZE: usize = 16;
+const VF : usize = 0xF;
 
 pub struct CPU {
     stack: [u16; STACK_SIZE],
     v_registers: [u8; N_VREGISTERS],
     i_register: u16,
-    vf_register: u16,
     delay_timer: u8,
     sound_timer: u8,
     program_counter: u16,
@@ -17,10 +17,9 @@ impl CPU {
     /// Every component is started at `0`.
     pub fn new() -> Self {
         CPU {
-            stack: [0; 16],
-            v_registers: [0; 16],
+            stack: [0; STACK_SIZE],
+            v_registers: [0; N_VREGISTERS],
             i_register: 0,
-            vf_register: 0,
             delay_timer: 0,
             sound_timer: 0,
             program_counter: 0,
@@ -97,19 +96,19 @@ impl CPU {
         self.v_registers[x_idx as usize] = self.v_registers[y_idx as usize];
     }
 
-    /// Perform a bitwise **or** between the values of the registers `x_idx` and `y_idx`,
+    /// Perform a bitwise *or* between the values of the registers `x_idx` and `y_idx`,
     /// then store the result in the register `x_idx`.
     fn or_reg(&mut self, x_idx: u8, y_idx: u8) {
         self.v_registers[x_idx as usize] |= self.v_registers[y_idx as usize];
     }
 
-    /// Perform a bitwise **and** between the values of the registers `x_idx` and `y_idx`,
+    /// Perform a bitwise *and* between the values of the registers `x_idx` and `y_idx`,
     /// then store the result in the register `x_idx`.
     fn and_reg(&mut self, x_idx: u8, y_idx: u8) {
         self.v_registers[x_idx as usize] &= self.v_registers[y_idx as usize];
     }
 
-    /// Perform a bitwise **xor** between the values of the registers `x_idx` and `y_idx`,
+    /// Perform a bitwise *xor* between the values of the registers `x_idx` and `y_idx`,
     /// then store the result in the register `x_idx`.
     fn xor_reg(&mut self, x_idx: u8, y_idx: u8) {
         self.v_registers[x_idx as usize] ^= self.v_registers[y_idx as usize];
@@ -121,13 +120,36 @@ impl CPU {
     /// otherwise, it is set to `0`.
     /// The lower 8 bits of the result are kept and stored in the register `x_idx`.
     fn add_reg(&mut self, x_idx: u8, y_idx: u8) {
-        let v: u16 = self.v_registers[x_idx as usize] as u16 + self.v_registers[y_idx as usize] as u16;
+        let v: u16 =
+            self.v_registers[x_idx as usize] as u16 + self.v_registers[y_idx as usize] as u16;
         if v >> 8 != 0 {
-            self.vf_register = 1;
+            self.v_registers[VF] = 1;
         } else {
-            self.vf_register = 0;
+            self.v_registers[VF] = 0;
         }
         self.v_registers[x_idx as usize] = (v & 0x00FF) as u8;
+    }
+
+    /// Subtract the values in registers `x_idx` and `y_idx`, storing the result in `x_idx`.
+    ///
+    /// If the value of the register `x_idx` is greater than `y_idx`,
+    /// then the VF register is set to `1`, otherwise it is set to `0`.
+    fn sub_reg(&mut self, x_idx: u8, y_idx: u8) {
+        if self.v_registers[x_idx as usize] > self.v_registers[y_idx as usize] {
+            self.v_registers[VF] = 1;
+        } else {
+            self.v_registers[VF] = 0;
+        }
+        self.v_registers[x_idx as usize] -= self.v_registers[y_idx as usize];
+    }
+
+    /// Perform a bitwise-shift *right* on the value of the register `x_idx`.
+    ///
+    /// If the least-significant bit of the register `x_idx` is `1` then VF is set to `1`,
+    /// otherwise it is set to `0`.
+    fn shr_reg(&mut self, x_idx: u8) {
+        self.v_registers[VF] = self.v_registers[x_idx as usize] & 0x1;
+        self.v_registers[x_idx as usize] >>= 1;
     }
 
     fn cycle(&mut self, opcode: u16) {
@@ -154,7 +176,7 @@ impl CPU {
             (0x8, x_idx, y_idx, 0x3) => self.xor_reg(x_idx as u8, y_idx as u8),
             (0x8, x_idx, y_idx, 0x4) => self.add_reg(x_idx as u8, y_idx as u8),
             (0x8, x_idx, y_idx, 0x5) => self.sub_reg(x_idx as u8, y_idx as u8),
-            (0x8, x_idx, y_idx, 0x6) => self.shr_reg(x_idx as u8, y_idx as u8),
+            (0x8, x_idx, _, 0x6) => self.shr_reg(x_idx as u8),
             (0x8, x_idx, y_idx, 0x7) => self.subn_reg(x_idx as u8, y_idx as u8),
             (0x8, x_idx, y_idx, 0xE) => self.shl_reg(x_idx as u8, y_idx as u8),
             (0x9, x_idx, y_idx, 0x0) => self.sne_reg(x_idx as u8, y_idx as u8),
@@ -173,7 +195,7 @@ impl CPU {
             (0xF, x_idx, 0x3, 0x3) => self.store_bcd(x_idx as u8),
             (0xF, x_idx, 0x5, 0x5) => self.store_registers(x_idx as u8),
             (0xF, x_idx, 0x6, 0x5) => self.read_registers(x_idx as u8),
-            (_, _, _, _) => panic!("unknown instruction")
+            (_, _, _, _) => panic!("unknown instruction"),
         }
     }
 }
