@@ -2,7 +2,7 @@ pub struct RAM {
     memory: [u8; 4096],
 }
 
-impl RAM {
+pub impl RAM {
     /// Create a new RAM instance.
     pub fn new() -> Self {
         RAM { memory: [0; 4096] }

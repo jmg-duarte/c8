@@ -1,15 +1,21 @@
+use crate::chip8::ram;
+use rand::prelude::*;
+
 const N_VREGISTERS: usize = 16;
 const STACK_SIZE: usize = 16;
-const VF : usize = 0xF;
+const VF: usize = 0xF;
+const V0: usize = 0x0;
 
 pub struct CPU {
     stack: [u16; STACK_SIZE],
-    v_registers: [u8; N_VREGISTERS],
-    i_register: u16,
+    v_reg: [u8; N_VREGISTERS],
+    i_reg: u16,
     delay_timer: u8,
     sound_timer: u8,
     program_counter: u16,
     stack_pointer: u8,
+    rng: ThreadRng,
+    ram: ram::RAM,
 }
 
 impl CPU {
@@ -18,12 +24,14 @@ impl CPU {
     pub fn new() -> Self {
         CPU {
             stack: [0; STACK_SIZE],
-            v_registers: [0; N_VREGISTERS],
-            i_register: 0,
+            v_reg: [0; N_VREGISTERS],
+            i_reg: 0,
             delay_timer: 0,
             sound_timer: 0,
             program_counter: 0,
             stack_pointer: 0,
+            rng: rand::thread_rng(),
+            ram: ram::RAM::new(),
         }
     }
 
@@ -54,20 +62,20 @@ impl CPU {
         self.program_counter = addr;
     }
 
-    /// Skip the next instruction if the value in the register `r_idx` is equal to `value`.
+    /// Skip the next instruction if the value in the register `x_idx` is equal to `value`.
     ///
     /// If the values are equal, the program counter is incremented by 2.
-    fn skip_eq_value(&mut self, r_idx: u8, value: u8) {
-        if self.v_registers[r_idx as usize] == value {
+    fn skip_eq_value(&mut self, x_idx: u8, value: u8) {
+        if self.v_reg[x_idx as usize] == value {
             self.program_counter += 2;
         }
     }
 
-    /// Skip the next instruction if the value in the register `r_idx` is not equal to `value`.
+    /// Skip the next instruction if the value in the register `x_idx` is not equal to `value`.
     ///
     /// If the values are not equal, the program counter is incremented by 2.
-    fn skip_neq_value(&mut self, r_idx: u8, value: u8) {
-        if self.v_registers[r_idx as usize] != value {
+    fn skip_neq_value(&mut self, x_idx: u8, value: u8) {
+        if self.v_reg[x_idx as usize] != value {
             self.program_counter += 2;
         }
     }
@@ -76,71 +84,70 @@ impl CPU {
     ///
     /// If the values are equal, the program counter is incremented by 2.
     fn skip_eq_regs(&mut self, x_idx: u8, y_idx: u8) {
-        if self.v_registers[x_idx as usize] != self.v_registers[y_idx as usize] {
+        if self.v_reg[x_idx as usize] != self.v_reg[y_idx as usize] {
             self.program_counter += 2;
         }
     }
 
-    /// Set the register `r_idx` to `value`.
-    fn set_register(&mut self, r_idx: u8, value: u8) {
-        self.v_registers[r_idx as usize] = value;
+    /// Set the register `x_idx` to `value`.
+    fn set_register(&mut self, x_idx: u8, value: u8) {
+        self.v_reg[x_idx as usize] = value;
     }
 
-    /// Add `value` to the current value of the register `r_idx`.
-    fn add_register(&mut self, r_idx: u8, value: u8) {
-        self.v_registers[r_idx as usize] += value;
+    /// Add `value` to the current value of the register `x_idx`.
+    fn add_register(&mut self, x_idx: u8, value: u8) {
+        self.v_reg[x_idx as usize] += value;
     }
 
     /// Store the value of the register `y_idx` in the register `x_idx`.
     fn store_reg(&mut self, x_idx: u8, y_idx: u8) {
-        self.v_registers[x_idx as usize] = self.v_registers[y_idx as usize];
+        self.v_reg[x_idx as usize] = self.v_reg[y_idx as usize];
     }
 
-    /// Perform a bitwise *or* between the values of the registers `x_idx` and `y_idx`,
+    /// Perform a bitwise *OR* between the values of the registers `x_idx` and `y_idx`,
     /// then store the result in the register `x_idx`.
     fn or_reg(&mut self, x_idx: u8, y_idx: u8) {
-        self.v_registers[x_idx as usize] |= self.v_registers[y_idx as usize];
+        self.v_reg[x_idx as usize] |= self.v_reg[y_idx as usize];
     }
 
-    /// Perform a bitwise *and* between the values of the registers `x_idx` and `y_idx`,
+    /// Perform a bitwise *AND* between the values of the registers `x_idx` and `y_idx`,
     /// then store the result in the register `x_idx`.
     fn and_reg(&mut self, x_idx: u8, y_idx: u8) {
-        self.v_registers[x_idx as usize] &= self.v_registers[y_idx as usize];
+        self.v_reg[x_idx as usize] &= self.v_reg[y_idx as usize];
     }
 
-    /// Perform a bitwise *xor* between the values of the registers `x_idx` and `y_idx`,
+    /// Perform a bitwise *XOR* between the values of the registers `x_idx` and `y_idx`,
     /// then store the result in the register `x_idx`.
     fn xor_reg(&mut self, x_idx: u8, y_idx: u8) {
-        self.v_registers[x_idx as usize] ^= self.v_registers[y_idx as usize];
+        self.v_reg[x_idx as usize] ^= self.v_reg[y_idx as usize];
     }
 
     /// Add the values in registers `x_idx` and `y_idx`, storing the result in `x_idx`.
     ///
-    /// If the result is greater than `255` then the VF register is set to `1`,
+    /// If the result is greater than `255` then the `VF` register is set to `1`,
     /// otherwise, it is set to `0`.
     /// The lower 8 bits of the result are kept and stored in the register `x_idx`.
     fn add_reg(&mut self, x_idx: u8, y_idx: u8) {
-        let v: u16 =
-            self.v_registers[x_idx as usize] as u16 + self.v_registers[y_idx as usize] as u16;
+        let v: u16 = self.v_reg[x_idx as usize] as u16 + self.v_reg[y_idx as usize] as u16;
         if v >> 8 != 0 {
-            self.v_registers[VF] = 1;
+            self.v_reg[VF] = 1;
         } else {
-            self.v_registers[VF] = 0;
+            self.v_reg[VF] = 0;
         }
-        self.v_registers[x_idx as usize] = (v & 0x00FF) as u8;
+        self.v_reg[x_idx as usize] = (v & 0x00FF) as u8;
     }
 
     /// Subtract the values in registers `x_idx` and `y_idx`, storing the result in `x_idx`.
     ///
     /// If the value of the register `x_idx` is greater than `y_idx`,
-    /// then the VF register is set to `1`, otherwise it is set to `0`.
+    /// then the `VF` register is set to `1`, otherwise it is set to `0`.
     fn sub_reg(&mut self, x_idx: u8, y_idx: u8) {
-        if self.v_registers[x_idx as usize] > self.v_registers[y_idx as usize] {
-            self.v_registers[VF] = 1;
+        if self.v_reg[x_idx as usize] > self.v_reg[y_idx as usize] {
+            self.v_reg[VF] = 1;
         } else {
-            self.v_registers[VF] = 0;
+            self.v_reg[VF] = 0;
         }
-        self.v_registers[x_idx as usize] -= self.v_registers[y_idx as usize];
+        self.v_reg[x_idx as usize] -= self.v_reg[y_idx as usize];
     }
 
     /// Perform a bitwise-shift *right* on the value of the register `x_idx`.
@@ -148,8 +155,131 @@ impl CPU {
     /// If the least-significant bit of the register `x_idx` is `1` then VF is set to `1`,
     /// otherwise it is set to `0`.
     fn shr_reg(&mut self, x_idx: u8) {
-        self.v_registers[VF] = self.v_registers[x_idx as usize] & 0x1;
-        self.v_registers[x_idx as usize] >>= 1;
+        self.v_reg[VF] = self.v_reg[x_idx as usize] & 0x1;
+        self.v_reg[x_idx as usize] >>= 1;
+    }
+
+    /// Subtracts the values in registers `y_idx` and `x_idx`, storing the result in `x_idx`.
+    ///
+    /// If the value of the register `y_idx` is greater than `x_idx`,
+    /// then the `VF` register is set to `1`, otherwise it is set to `0`.
+    fn subn_reg(&mut self, x_idx: u8, y_idx: u8) {
+        if self.v_reg[y_idx as usize] > self.v_reg[x_idx as usize] {
+            self.v_reg[VF] = 1;
+        } else {
+            self.v_reg[VF] = 0;
+        }
+        self.v_reg[x_idx as usize] = self.v_reg[y_idx as usize] - self.v_reg[x_idx as usize];
+    }
+
+    /// Perform a bitwise-shift *left* on the value of the register `x_idx`.
+    ///
+    /// If the most-significant bit of the register `x_idx` is `1` then VF is set to `1`,
+    /// otherwise it is set to `0`.
+    fn shl_reg(&mut self, x_idx: u8) {
+        self.v_reg[VF] = self.v_reg[x_idx as usize] >> 7;
+        self.v_reg[x_idx as usize] <<= 1;
+    }
+
+    /// Skip the next instruction if the values in registers `x_idx` and `y_idx` are not equal.
+    ///
+    /// If the values are not equal, the program counter is incremented by `2`.
+    fn skip_neq_xy(&mut self, x_idx: u8, y_idx: u8) {
+        if self.v_reg[x_idx as usize] != self.v_reg[y_idx as usize] {
+            self.program_counter += 2;
+        }
+    }
+
+    /// Set the value of the `I` register to `addr`.
+    fn set_i(&mut self, addr: u16) {
+        self.i_reg = addr;
+    }
+
+    /// Jump to the location `addr + V0`.
+    ///
+    /// The program counter is set to the resulting sum of `addr` and `V0`.
+    fn jmp_offset(&mut self, addr: u16) {
+        self.program_counter = addr + self.v_reg[V0] as u16;
+    }
+
+    /// Generate a random value between `0` and `255`,
+    /// and perform a bitwise *AND* between the generated number and `value`.
+    /// The operation result is stored in the register `x_idx`.
+    fn rnd_and(&mut self, x_idx: u8, value: u8) {
+        let r_num: u8 = self.rng.gen();
+        self.v_reg[x_idx as usize] = r_num & value;
+    }
+
+    /// TODO
+    fn draw(&mut self, x_idx: u8, y_idx: u8, n: u8) {
+        let start = self.i_reg as usize;
+        let end = start + (n as usize);
+        for addr in start..end {
+            // self.ram.read(addr)
+        }
+    }
+
+    /// TODO
+    fn skip_key_pressed(&mut self, x_idx: u8) {
+        unimplemented!()
+    }
+
+    /// TODO
+    fn skip_key_not_pressed(&mut self, x_idx: u8) {
+        unimplemented!()
+    }
+
+    /// Read the value from the delay timer into the register `x_idx`.
+    fn read_delay_timer(&mut self, x_idx: u8) {
+        self.v_reg[x_idx as usize] = self.delay_timer;
+    }
+
+    /// TODO
+    fn wait_keypress(&mut self, x_idx: u8) {
+        unimplemented!()
+    }
+
+    /// Write the value of the register `x_idx` into the delay timer.
+    fn set_delay_timer(&mut self, x_idx: u8) {
+        self.delay_timer = self.v_reg[x_idx as usize];
+    }
+
+    /// Write the value of the register `x_idx` into the sound timer.
+    fn set_sound_timer(&mut self, x_idx: u8) {
+        self.sound_timer = self.v_reg[x_idx as usize];
+    }
+
+    /// Increment the value of the `I` register by the value in the `x_idx` register.
+    fn add_i(&mut self, x_idx: u8) {
+        self.i_reg += self.v_reg[x_idx as usize] as u16;
+    }
+
+    /// TODO
+    fn set_i_digit(&mut self, x_idx: u8) {
+        unimplemented!()
+    }
+
+    /// TODO
+    fn store_bcd(&mut self, x_idx: u8) {
+        unimplemented!()
+    }
+
+    /// Write registers from `0` to `x_idx` (inclusive), to memory.
+    ///
+    /// Writing starts at the address in `I` and progresses in increments (`I`, `I+1`, `I+2`, `...`).
+    fn store_registers(&mut self, x_idx: u8) {
+        for idx in 0..=(x_idx as usize) {
+            self.ram.write(self.i_reg as usize + idx, self.v_reg[idx]);
+        }
+    }
+
+    /// Read from memory to registers `0` to `x_idx` (inclusive).
+    ///
+    /// Reading starts at the address in `I` and progresses in increments (`I`, `I+1`, `I+2`, `...`).
+    fn read_registers(&mut self, x_idx: u8) {
+        for idx in 0..=(x_idx as usize) {
+            self.v_reg[idx] = self.ram.read(self.i_reg as usize + idx);
+        }
     }
 
     fn cycle(&mut self, opcode: u16) {
@@ -165,11 +295,11 @@ impl CPU {
             (0x0, 0x0, 0xE, 0xE) => self.ret_subroutine(),
             (0x1, _, _, _) => self.jmp_addr(op_2 | op_3 | op_4),
             (0x2, _, _, _) => self.call_subroutine(op_2 | op_3 | op_4),
-            (0x3, r_idx, _, _) => self.skip_eq_value(r_idx as u8, (op_3 | op_4) as u8),
-            (0x4, r_idx, _, _) => self.skip_neq_value(r_idx as u8, (op_3 | op_4) as u8),
+            (0x3, x_idx, _, _) => self.skip_eq_value(x_idx as u8, (op_3 | op_4) as u8),
+            (0x4, x_idx, _, _) => self.skip_neq_value(x_idx as u8, (op_3 | op_4) as u8),
             (0x5, x_idx, y_idx, 0x0) => self.skip_eq_regs(x_idx as u8, y_idx as u8),
-            (0x6, r_idx, _, _) => self.set_register(r_idx as u8, (op_3 | op_4) as u8),
-            (0x7, r_idx, _, _) => self.add_register(r_idx as u8, (op_3 | op_4) as u8),
+            (0x6, x_idx, _, _) => self.set_register(x_idx as u8, (op_3 | op_4) as u8),
+            (0x7, x_idx, _, _) => self.add_register(x_idx as u8, (op_3 | op_4) as u8),
             (0x8, x_idx, y_idx, 0x0) => self.store_reg(x_idx as u8, y_idx as u8),
             (0x8, x_idx, y_idx, 0x1) => self.or_reg(x_idx as u8, y_idx as u8),
             (0x8, x_idx, y_idx, 0x2) => self.and_reg(x_idx as u8, y_idx as u8),
@@ -178,12 +308,12 @@ impl CPU {
             (0x8, x_idx, y_idx, 0x5) => self.sub_reg(x_idx as u8, y_idx as u8),
             (0x8, x_idx, _, 0x6) => self.shr_reg(x_idx as u8),
             (0x8, x_idx, y_idx, 0x7) => self.subn_reg(x_idx as u8, y_idx as u8),
-            (0x8, x_idx, y_idx, 0xE) => self.shl_reg(x_idx as u8, y_idx as u8),
-            (0x9, x_idx, y_idx, 0x0) => self.sne_reg(x_idx as u8, y_idx as u8),
-            (0xA, _, _, _) => self.set_i(x_idx as u8),
-            (0xB, _, _, _) => self.jmp_offset(x_idx as u8),
-            (0xC, x_idx, _, _) => self.rnd_and(x_idx as u8),
-            (0xD, x_idx, y_idx, n) => self.draw(x_idx as u8),
+            (0x8, x_idx, _, 0xE) => self.shl_reg(x_idx as u8),
+            (0x9, x_idx, y_idx, 0x0) => self.skip_neq_xy(x_idx as u8, y_idx as u8),
+            (0xA, _, _, _) => self.set_i(op_2 | op_3 | op_4),
+            (0xB, _, _, _) => self.jmp_offset(op_2 | op_3 | op_4),
+            (0xC, x_idx, _, _) => self.rnd_and(x_idx as u8, (op_3 | op_4) as u8),
+            (0xD, x_idx, y_idx, n) => self.draw(x_idx as u8, y_idx as u8, n as u8),
             (0xE, x_idx, 0x9, 0xE) => self.skip_key_pressed(x_idx as u8),
             (0xE, x_idx, 0xA, 0x1) => self.skip_key_not_pressed(x_idx as u8),
             (0xF, x_idx, 0x0, 0x7) => self.read_delay_timer(x_idx as u8),
