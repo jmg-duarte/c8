@@ -352,4 +352,12 @@ mod cpu_tests {
         assert_eq!(cpu.program_counter, 0);
         assert_eq!(cpu.stack_pointer, 0);
     }
+
+    #[test]
+    fn jump_to_address() {
+        let mut cpu = CPU::new();
+        let addr = 0x200;
+        cpu.jmp_addr(addr);
+        assert_eq!(cpu.program_counter, addr);
+    }
 }
