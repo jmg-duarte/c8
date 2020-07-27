@@ -37,7 +37,7 @@ impl CPU {
 
     /// Return from a subroutine.
     ///
-    /// Wiites the address on top of the stack to the program counter and then
+    /// Writes the address on top of the stack to the program counter and then
     /// it subtracts `1` from the stack pointer.
     fn ret_subroutine(&mut self) {
         self.program_counter = self.stack[self.stack_pointer as usize];
@@ -327,5 +327,29 @@ impl CPU {
             (0xF, x_idx, 0x6, 0x5) => self.read_registers(x_idx as u8),
             (_, _, _, _) => panic!("unknown instruction"),
         }
+    }
+}
+
+#[cfg(test)]
+mod cpu_tests {
+    use super::*;
+
+    #[test]
+    fn call_subroutine() {
+        let mut cpu = CPU::new();
+        let addr = 0x200;
+        cpu.call_subroutine(addr);
+        assert_eq!(cpu.stack_pointer, 1);
+        assert_eq!(cpu.stack[cpu.stack_pointer as usize], 0);
+        assert_eq!(cpu.program_counter, addr);
+    }
+
+    #[test]
+    fn return_subroutine() {
+        let mut cpu = CPU::new();
+        cpu.call_subroutine(0x200);
+        cpu.ret_subroutine();
+        assert_eq!(cpu.program_counter, 0);
+        assert_eq!(cpu.stack_pointer, 0);
     }
 }
