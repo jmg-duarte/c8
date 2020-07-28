@@ -360,4 +360,26 @@ mod cpu_tests {
         cpu.jmp_addr(addr);
         assert_eq!(cpu.program_counter, addr);
     }
+
+    #[test]
+    fn skip_if_register_eq_value() {
+        let mut cpu = CPU::new();
+        let old_pc = cpu.program_counter;
+        cpu.v_reg[0] = 128;
+        cpu.skip_eq_value(0, 127);
+        assert_eq!(cpu.program_counter, old_pc);
+        cpu.skip_eq_value(0, 128);
+        assert_eq!(cpu.program_counter, old_pc + 2);
+    }
+
+    #[test]
+    fn skip_if_register_neq_value() {
+        let mut cpu = CPU::new();
+        let old_pc = cpu.program_counter;
+        cpu.v_reg[0] = 128;
+        cpu.skip_neq_value(0, 128);
+        assert_eq!(cpu.program_counter, old_pc);
+        cpu.skip_neq_value(0, 127);
+        assert_eq!(cpu.program_counter, old_pc + 2);
+    }
 }
