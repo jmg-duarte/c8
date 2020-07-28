@@ -83,8 +83,8 @@ impl CPU {
     /// Skip the next instruction if the value in the register `x_idx` is equal to the value in the register `y_idx`.
     ///
     /// If the values are equal, the program counter is incremented by 2.
-    fn skip_eq_regs(&mut self, x_idx: u8, y_idx: u8) {
-        if self.v_reg[x_idx as usize] != self.v_reg[y_idx as usize] {
+    fn skip_eq_xy(&mut self, x_idx: u8, y_idx: u8) {
+        if self.v_reg[x_idx as usize] == self.v_reg[y_idx as usize] {
             self.program_counter += 2;
         }
     }
@@ -297,7 +297,7 @@ impl CPU {
             (0x2, _, _, _) => self.call_subroutine(op_2 | op_3 | op_4),
             (0x3, x_idx, _, _) => self.skip_eq_value(x_idx as u8, (op_3 | op_4) as u8),
             (0x4, x_idx, _, _) => self.skip_neq_value(x_idx as u8, (op_3 | op_4) as u8),
-            (0x5, x_idx, y_idx, 0x0) => self.skip_eq_regs(x_idx as u8, y_idx as u8),
+            (0x5, x_idx, y_idx, 0x0) => self.skip_eq_xy(x_idx as u8, y_idx as u8),
             (0x6, x_idx, _, _) => self.set_register(x_idx as u8, (op_3 | op_4) as u8),
             (0x7, x_idx, _, _) => self.add_register(x_idx as u8, (op_3 | op_4) as u8),
             (0x8, x_idx, y_idx, 0x0) => self.store_reg(x_idx as u8, y_idx as u8),
@@ -380,6 +380,32 @@ mod cpu_tests {
         cpu.skip_neq_value(0, 128);
         assert_eq!(cpu.program_counter, old_pc);
         cpu.skip_neq_value(0, 127);
+        assert_eq!(cpu.program_counter, old_pc + 2);
+    }
+
+    #[test]
+    fn skip_if_register_eq_xy() {
+        let mut cpu = CPU::new();
+        let old_pc = cpu.program_counter;
+        cpu.v_reg[0] = 128;
+        cpu.v_reg[7] = 128;
+        cpu.v_reg[15] = 127;
+        cpu.skip_eq_xy(0, 15);
+        assert_eq!(cpu.program_counter, old_pc);
+        cpu.skip_eq_xy(0, 7);
+        assert_eq!(cpu.program_counter, old_pc + 2);
+    }
+
+    #[test]
+    fn skip_if_register_neq_xy() {
+        let mut cpu = CPU::new();
+        let old_pc = cpu.program_counter;
+        cpu.v_reg[0] = 128;
+        cpu.v_reg[7] = 128;
+        cpu.v_reg[15] = 127;
+        cpu.skip_neq_xy(0, 7);
+        assert_eq!(cpu.program_counter, old_pc);
+        cpu.skip_neq_xy(0, 15);
         assert_eq!(cpu.program_counter, old_pc + 2);
     }
 }
