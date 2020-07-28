@@ -90,35 +90,35 @@ impl CPU {
     }
 
     /// Set the register `x_idx` to `value`.
-    fn set_register(&mut self, x_idx: u8, value: u8) {
+    fn set_x_value(&mut self, x_idx: u8, value: u8) {
         self.v_reg[x_idx as usize] = value;
     }
 
     /// Add `value` to the current value of the register `x_idx`.
-    fn add_register(&mut self, x_idx: u8, value: u8) {
+    fn add_x_value(&mut self, x_idx: u8, value: u8) {
         self.v_reg[x_idx as usize] += value;
     }
 
     /// Store the value of the register `y_idx` in the register `x_idx`.
-    fn store_reg(&mut self, x_idx: u8, y_idx: u8) {
+    fn store_xy(&mut self, x_idx: u8, y_idx: u8) {
         self.v_reg[x_idx as usize] = self.v_reg[y_idx as usize];
     }
 
     /// Perform a bitwise *OR* between the values of the registers `x_idx` and `y_idx`,
     /// then store the result in the register `x_idx`.
-    fn or_reg(&mut self, x_idx: u8, y_idx: u8) {
+    fn or_xy(&mut self, x_idx: u8, y_idx: u8) {
         self.v_reg[x_idx as usize] |= self.v_reg[y_idx as usize];
     }
 
     /// Perform a bitwise *AND* between the values of the registers `x_idx` and `y_idx`,
     /// then store the result in the register `x_idx`.
-    fn and_reg(&mut self, x_idx: u8, y_idx: u8) {
+    fn and_xy(&mut self, x_idx: u8, y_idx: u8) {
         self.v_reg[x_idx as usize] &= self.v_reg[y_idx as usize];
     }
 
     /// Perform a bitwise *XOR* between the values of the registers `x_idx` and `y_idx`,
     /// then store the result in the register `x_idx`.
-    fn xor_reg(&mut self, x_idx: u8, y_idx: u8) {
+    fn xor_xy(&mut self, x_idx: u8, y_idx: u8) {
         self.v_reg[x_idx as usize] ^= self.v_reg[y_idx as usize];
     }
 
@@ -127,7 +127,7 @@ impl CPU {
     /// If the result is greater than `255` then the `VF` register is set to `1`,
     /// otherwise, it is set to `0`.
     /// The lower 8 bits of the result are kept and stored in the register `x_idx`.
-    fn add_reg(&mut self, x_idx: u8, y_idx: u8) {
+    fn add_xy(&mut self, x_idx: u8, y_idx: u8) {
         let v: u16 = self.v_reg[x_idx as usize] as u16 + self.v_reg[y_idx as usize] as u16;
         if v >> 8 != 0 {
             self.v_reg[VF] = 1;
@@ -141,7 +141,7 @@ impl CPU {
     ///
     /// If the value of the register `x_idx` is greater than `y_idx`,
     /// then the `VF` register is set to `1`, otherwise it is set to `0`.
-    fn sub_reg(&mut self, x_idx: u8, y_idx: u8) {
+    fn sub_xy(&mut self, x_idx: u8, y_idx: u8) {
         if self.v_reg[x_idx as usize] > self.v_reg[y_idx as usize] {
             self.v_reg[VF] = 1;
         } else {
@@ -154,7 +154,7 @@ impl CPU {
     ///
     /// If the least-significant bit of the register `x_idx` is `1` then VF is set to `1`,
     /// otherwise it is set to `0`.
-    fn shr_reg(&mut self, x_idx: u8) {
+    fn shr_x(&mut self, x_idx: u8) {
         self.v_reg[VF] = self.v_reg[x_idx as usize] & 0x1;
         self.v_reg[x_idx as usize] >>= 1;
     }
@@ -163,7 +163,7 @@ impl CPU {
     ///
     /// If the value of the register `y_idx` is greater than `x_idx`,
     /// then the `VF` register is set to `1`, otherwise it is set to `0`.
-    fn subn_reg(&mut self, x_idx: u8, y_idx: u8) {
+    fn subn_xy(&mut self, x_idx: u8, y_idx: u8) {
         if self.v_reg[y_idx as usize] > self.v_reg[x_idx as usize] {
             self.v_reg[VF] = 1;
         } else {
@@ -176,7 +176,7 @@ impl CPU {
     ///
     /// If the most-significant bit of the register `x_idx` is `1` then VF is set to `1`,
     /// otherwise it is set to `0`.
-    fn shl_reg(&mut self, x_idx: u8) {
+    fn shl_x(&mut self, x_idx: u8) {
         self.v_reg[VF] = self.v_reg[x_idx as usize] >> 7;
         self.v_reg[x_idx as usize] <<= 1;
     }
@@ -198,7 +198,7 @@ impl CPU {
     /// Jump to the location `addr + V0`.
     ///
     /// The program counter is set to the resulting sum of `addr` and `V0`.
-    fn jmp_offset(&mut self, addr: u16) {
+    fn jmp_addr_offset(&mut self, addr: u16) {
         self.program_counter = addr + self.v_reg[V0] as u16;
     }
 
@@ -298,20 +298,20 @@ impl CPU {
             (0x3, x_idx, _, _) => self.skip_eq_value(x_idx as u8, (op_3 | op_4) as u8),
             (0x4, x_idx, _, _) => self.skip_neq_value(x_idx as u8, (op_3 | op_4) as u8),
             (0x5, x_idx, y_idx, 0x0) => self.skip_eq_xy(x_idx as u8, y_idx as u8),
-            (0x6, x_idx, _, _) => self.set_register(x_idx as u8, (op_3 | op_4) as u8),
-            (0x7, x_idx, _, _) => self.add_register(x_idx as u8, (op_3 | op_4) as u8),
-            (0x8, x_idx, y_idx, 0x0) => self.store_reg(x_idx as u8, y_idx as u8),
-            (0x8, x_idx, y_idx, 0x1) => self.or_reg(x_idx as u8, y_idx as u8),
-            (0x8, x_idx, y_idx, 0x2) => self.and_reg(x_idx as u8, y_idx as u8),
-            (0x8, x_idx, y_idx, 0x3) => self.xor_reg(x_idx as u8, y_idx as u8),
-            (0x8, x_idx, y_idx, 0x4) => self.add_reg(x_idx as u8, y_idx as u8),
-            (0x8, x_idx, y_idx, 0x5) => self.sub_reg(x_idx as u8, y_idx as u8),
-            (0x8, x_idx, _, 0x6) => self.shr_reg(x_idx as u8),
-            (0x8, x_idx, y_idx, 0x7) => self.subn_reg(x_idx as u8, y_idx as u8),
-            (0x8, x_idx, _, 0xE) => self.shl_reg(x_idx as u8),
+            (0x6, x_idx, _, _) => self.set_x_value(x_idx as u8, (op_3 | op_4) as u8),
+            (0x7, x_idx, _, _) => self.add_x_value(x_idx as u8, (op_3 | op_4) as u8),
+            (0x8, x_idx, y_idx, 0x0) => self.store_xy(x_idx as u8, y_idx as u8),
+            (0x8, x_idx, y_idx, 0x1) => self.or_xy(x_idx as u8, y_idx as u8),
+            (0x8, x_idx, y_idx, 0x2) => self.and_xy(x_idx as u8, y_idx as u8),
+            (0x8, x_idx, y_idx, 0x3) => self.xor_xy(x_idx as u8, y_idx as u8),
+            (0x8, x_idx, y_idx, 0x4) => self.add_xy(x_idx as u8, y_idx as u8),
+            (0x8, x_idx, y_idx, 0x5) => self.sub_xy(x_idx as u8, y_idx as u8),
+            (0x8, x_idx, _, 0x6) => self.shr_x(x_idx as u8),
+            (0x8, x_idx, y_idx, 0x7) => self.subn_xy(x_idx as u8, y_idx as u8),
+            (0x8, x_idx, _, 0xE) => self.shl_x(x_idx as u8),
             (0x9, x_idx, y_idx, 0x0) => self.skip_neq_xy(x_idx as u8, y_idx as u8),
             (0xA, _, _, _) => self.set_i(op_2 | op_3 | op_4),
-            (0xB, _, _, _) => self.jmp_offset(op_2 | op_3 | op_4),
+            (0xB, _, _, _) => self.jmp_addr_offset(op_2 | op_3 | op_4),
             (0xC, x_idx, _, _) => self.rnd_and(x_idx as u8, (op_3 | op_4) as u8),
             (0xD, x_idx, y_idx, n) => self.draw(x_idx as u8, y_idx as u8, n as u8),
             (0xE, x_idx, 0x9, 0xE) => self.skip_key_pressed(x_idx as u8),
@@ -407,5 +407,23 @@ mod cpu_tests {
         assert_eq!(cpu.program_counter, old_pc);
         cpu.skip_neq_xy(0, 15);
         assert_eq!(cpu.program_counter, old_pc + 2);
+    }
+
+    #[test]
+    fn set_store_register() {
+        let mut cpu = CPU::new();
+        cpu.set_x_value(0, 128);
+        assert_eq!(cpu.v_reg[0], 128);
+        cpu.store_xy(0, 1);
+        assert_eq!(cpu.v_reg[0], 0);
+    }
+
+    #[test]
+    fn add_value_to_register() {
+        let mut cpu = CPU::new();
+        cpu.set_x_value(0, 128);
+        assert_eq!(cpu.v_reg[0], 128);
+        cpu.add_x_value(0, 127);
+        assert_eq!(cpu.v_reg[0], 255);
     }
 }
