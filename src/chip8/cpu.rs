@@ -453,4 +453,13 @@ mod cpu_tests {
         cpu.xor_xy(0, 1);
         assert_eq!(cpu.v_reg[0], 128 ^ 127);
     }
+
+    #[test]
+    fn add_registers() {
+        let mut cpu = CPU::new();
+        cpu.set_x_value(0, 128);
+        cpu.set_x_value(1, 127);
+        cpu.add_xy(0, 1);
+        assert_eq!(cpu.v_reg[0], 128 + 127);
+    }
 }
