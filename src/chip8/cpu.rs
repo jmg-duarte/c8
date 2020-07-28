@@ -426,4 +426,13 @@ mod cpu_tests {
         cpu.add_x_value(0, 127);
         assert_eq!(cpu.v_reg[0], 255);
     }
+
+    #[test]
+    fn or_registers() {
+        let mut cpu = CPU::new();
+        cpu.set_x_value(0, 128);
+        cpu.set_x_value(1, 127);
+        cpu.or_xy(0, 1);
+        assert_eq!(cpu.v_reg[0], 128 | 127);
+    }
 }
